@@ -1,32 +1,23 @@
-# 🚀 Production-Ready Text-to-SQL Boilerplate
-**Powered by AgentScope, Ollama, Qdrant, and Celery**
+# 🚀 Text-to-SQL with Quantized Local Models (AgentScope)
 
-Welcome to a robust, scalable, and fully local Text-to-SQL boilerplate! This project demonstrates how to build a multi-agent system that converts natural language to SQL, executes the queries, and learns from past interactions—all while maintaining a production-grade architecture.
+So in this case study, the idea is to wire up a proper multi-agent pipeline using AgentScope — where separate agents handle **schema understanding, query generation, validation, and execution** — instead of dumping everything into one prompt.
 
----
-
-## 🌟 Why This Boilerplate?
-
-Building AI agent workflows is easy in a notebook, but deploying them to production is hard. This boilerplate bridges that gap by integrating enterprise-grade tools to handle long-running tasks, persistent memory, and local LLM execution safely and efficiently.
-
-### 🏭 Production-Ready Architecture
-- **Asynchronous Task Queue:** LLM generation and database execution can be slow. By using **Celery** and **Redis**, agent interactions are decoupled and moved to background workers. This prevents your main application (like a FastAPI web server) from blocking while waiting for the LLM to respond.
-- **Fully Local & Private:** Powered by **Ollama** (`llama3`), your database schema and user queries never leave your local machine or VPC. This guarantees complete privacy, zero API costs, and no rate limits.
-- **Containerized Infrastructure:** Essential stateful services like Redis (message broker) and Qdrant (vector database) are orchestrated via **Docker Compose**, making environment parity and teardowns a breeze.
-
-### 🧠 The Power of Qdrant (Vector Memory)
-A static AI agent makes the same mistakes repeatedly. By integrating **Qdrant**, this boilerplate gives your Text-to-SQL workflow **Few-Shot Episodic Memory**:
-- **Contextual Awareness:** Past successful queries are mapped and stored as dense vector embeddings.
-- **Dynamic Self-Improvement:** When a user asks a new question, Qdrant performs a semantic similarity search to retrieve the most relevant past queries. The agent seamlessly injects these into its prompt as few-shot examples, drastically improving SQL accuracy and adapting to your specific domain over time.
+The interesting part: it runs entirely on a **quantized Qwen model via Ollama**. No OpenAI. No API bills. Just your machine.
 
 ---
 
-## 🏗️ System Components
+### 🏗️ Here's what the stack looks like:
+- **AgentScope** for orchestrating the agent conversation flow
+- **Qwen (quantized)** via Ollama for local inference that's actually fast
+- **Qdrant** for vector memory so agents reuse good past queries
+- **Celery + Redis** for async task handling when generation runs long
 
-1. **AgentScope Orchestration:** The core multi-agent framework managing dialogue flow between specialized sub-agents.
-2. **SQLGenerator Agent:** Receives the user query, fetches relevant context from Qdrant, and generates accurate SQL using `llama3`.
-3. **DBExecutor Agent (Feedback Loop):** Executes the generated SQL locally, returning execution data or error traces so the system can validate the AI's logic.
-4. **Celery Worker:** Wraps the entire agent sequence into a non-blocking background job.
+The quantized Qwen angle is what makes this worth exploring right now. The model punches well above its weight at this size, and running it locally with AgentScope's multi-agent routing is a combo I hadn't seen documented anywhere.
+
+*(Source code is 100% open source!)*
+
+👉 **Disclaimer:**
+This is built to understand how multi-agent orchestration works with local quantized models. The stack is a starting point — swap what makes sense for your setup.
 
 ---
 
@@ -35,7 +26,7 @@ A static AI agent makes the same mistakes repeatedly. By integrating **Qdrant**,
 1. **Docker & Docker Compose** (for running Redis and Qdrant)
 2. **Python 3.9+**
 3. **[Ollama](https://ollama.com/)** installed and running locally.
-   - Pull and start the default model: `ollama run llama3`
+   - Pull the model: `ollama run qwen2.5` (or any `qwen` variant you prefer)
 
 ---
 
@@ -68,11 +59,4 @@ In a new terminal, dispatch a natural language query to the background task queu
 ```bash
 python main.py
 ```
-*You will see the task dispatched to Celery. The main thread will poll for the result while the agents collaborate in the background to generate and execute the SQL, finally returning the complete payload.*
-
----
-
-## 💡 Next Steps / Customization
-- **Expose an API:** Wrap `main.py` in a **FastAPI** or **Flask** endpoint. The architecture is already set up to handle asynchronous web requests!
-- **Swap the Database:** Update `src/database/db_manager.py` to securely connect to your production PostgreSQL or MySQL database instead of the provided dummy SQLite file.
-- **Upgrade the LLM:** Tweak `config/model_configs.json` to point to a larger local model (`llama3:70b`, `mistral`) or easily switch to remote APIs (like OpenAI) via AgentScope's standard config.
+*You will see the pipeline in action: The Schema Agent analyzes the request, the SQL Generator creates the query using Qdrant memory, the Validator checks it, and the Executor runs it against the local SQLite DB.*

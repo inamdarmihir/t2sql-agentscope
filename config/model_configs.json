@@ -2,9 +2,13 @@
     {
         "model_type": "ollama_chat",
         "config_name": "ollama_chat_config",
-        "model_name": "llama3",
+        "model_name": "qwen2.5", 
         "client_args": {
             "host": "http://127.0.0.1:11434"
+        },
+        "options": {
+            "temperature": 0.0,
+            "num_ctx": 4096
         }
     }
 ]
