@@ -8,11 +8,11 @@ The interesting part: it runs entirely on a **quantized Qwen model via Ollama**.
 
 ### 🏗️ Here's what the stack looks like:
 - **AgentScope** for orchestrating the agent conversation flow
-- **Qwen (quantized)** via Ollama for local inference that's actually fast
+- **Quantized LLM** via Ollama for local inference that's actually fast
 - **Qdrant** for vector memory so agents reuse good past queries
 - **Celery + Redis** for async task handling when generation runs long
 
-The quantized Qwen angle is what makes this worth exploring right now. The model punches well above its weight at this size, and running it locally with AgentScope's multi-agent routing is a combo I hadn't seen documented anywhere.
+The quantized LLM angle is what makes this worth exploring right now. Running these models locally with AgentScope's multi-agent routing is a combo I hadn't seen documented anywhere.
 
 *(Source code is 100% open source!)*
 
@@ -21,12 +21,36 @@ This is built to understand how multi-agent orchestration works with local quant
 
 ---
 
+## 🔌 Plug & Play Any Quantized Model
+
+This boilerplate is designed to be **100% plug-and-play**. You are not locked into Qwen, Llama3, or any specific model. Because it leverages Ollama, you can swap in **any** quantized model `.gguf` supported by the Ollama ecosystem.
+
+**To swap your model:**
+1. Pull your model of choice via Ollama (e.g., `mistral`, `phi3`, `llama3:8b-instruct-q4_K_M`, `codellama`).
+   ```bash
+   ollama run <your-model-name>
+   ```
+2. Update the `"model_name"` field in `config/model_configs.json` to match:
+   ```json
+   {
+       "model_type": "ollama_chat",
+       "config_name": "ollama_chat_config",
+       "model_name": "<your-model-name>", 
+       "client_args": {
+           "host": "http://127.0.0.1:11434"
+       }
+   }
+   ```
+That's it. The AgentScope pipeline will instantly route prompts to your new model without changing a single line of agent code.
+
+---
+
 ## 🛠️ Prerequisites
 
 1. **Docker & Docker Compose** (for running Redis and Qdrant)
 2. **Python 3.9+**
 3. **[Ollama](https://ollama.com/)** installed and running locally.
-   - Pull the model: `ollama run qwen2.5` (or any `qwen` variant you prefer)
+   - Pull the default model: `ollama run qwen2.5`
 
 ---
 
