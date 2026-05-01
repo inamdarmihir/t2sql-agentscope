@@ -1,86 +1,209 @@
-# 🚀 Text-to-SQL with Quantized Local Models (AgentScope)
+# Text-to-SQL with AgentScope, Ollama, Celery, and Qdrant
 
-So in this case study, the idea is to wire up a proper multi-agent pipeline using AgentScope — where separate agents handle **schema understanding, query generation, validation, and execution** — instead of dumping everything into one prompt.
+[![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)](https://python.org)
+[![AgentScope](https://img.shields.io/badge/AgentScope-0.1.x-FF6B35?logo=github&logoColor=white)](https://github.com/modelscope/agentscope)
+[![Ollama](https://img.shields.io/badge/Ollama-Local%20LLM-000000?logo=ollama&logoColor=white)](https://ollama.com)
+[![Qdrant](https://img.shields.io/badge/Powered%20by-Qdrant-DC244C?logo=qdrant&logoColor=white)](https://qdrant.tech)
+[![Celery](https://img.shields.io/badge/Celery-5.x-37814A?logo=celery&logoColor=white)](https://docs.celeryq.dev)
+[![Redis](https://img.shields.io/badge/Redis-7.x-DC382D?logo=redis&logoColor=white)](https://redis.io)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-The interesting part: it runs entirely on a **quantized Qwen model via Ollama**. No OpenAI. No API bills. Just your machine.
+A production-ready boilerplate for multi-agent Text-to-SQL using a fully local stack. Separate agents handle schema understanding, query generation, validation, and execution. No OpenAI. No API costs. Just your machine.
 
----
+The interesting part: it runs on any quantized model via Ollama, uses Qdrant to store and retrieve past correct queries as few-shot context, and offloads long-running generation to a Celery task queue so nothing blocks.
 
-### 🏗️ Here's what the stack looks like:
-- **AgentScope** for orchestrating the agent conversation flow
-- **Quantized LLM** via Ollama for local inference that's actually fast
-- **Qdrant** for vector memory so agents reuse good past queries
-- **Celery + Redis** for async task handling when generation runs long
-
-The quantized LLM angle is what makes this worth exploring right now. Running these models locally with AgentScope's multi-agent routing is a combo I hadn't seen documented anywhere.
-
-*(Source code is 100% open source!)*
-
-👉 **Disclaimer:**
-This is built to understand how multi-agent orchestration works with local quantized models. The stack is a starting point — swap what makes sense for your setup.
+> This project is built to understand how multi-agent orchestration works with local quantized models. The stack is a starting point — swap in what makes sense for your setup.
 
 ---
 
-## 🔌 Plug & Play Any Quantized Model
+## Architecture
 
-This boilerplate is designed to be **100% plug-and-play**. You are not locked into Qwen, Llama3, or any specific model. Because it leverages Ollama, you can swap in **any** quantized model `.gguf` supported by the Ollama ecosystem.
-
-**To swap your model:**
-1. Pull your model of choice via Ollama (e.g., `mistral`, `phi3`, `llama3:8b-instruct-q4_K_M`, `codellama`).
-   ```bash
-   ollama run <your-model-name>
-   ```
-2. Update the `"model_name"` field in `config/model_configs.json` to match:
-   ```json
-   {
-       "model_type": "ollama_chat",
-       "config_name": "ollama_chat_config",
-       "model_name": "<your-model-name>", 
-       "client_args": {
-           "host": "http://127.0.0.1:11434"
-       }
-   }
-   ```
-That's it. The AgentScope pipeline will instantly route prompts to your new model without changing a single line of agent code.
-
----
-
-## 🛠️ Prerequisites
-
-1. **Docker & Docker Compose** (for running Redis and Qdrant)
-2. **Python 3.9+**
-3. **[Ollama](https://ollama.com/)** installed and running locally.
-   - Pull the default model: `ollama run qwen2.5`
+```
+Natural language query
+         |
+         v
+  [Celery Task Queue]  <-- Redis broker
+         |
+         v
+  [Schema Agent]       analyzes table structure and relationships
+         |
+         v
+  [SQL Generator]      queries Qdrant for similar past examples,
+                       generates SQL using local Ollama model
+         |
+         v
+  [Validator Agent]    checks syntax and schema compatibility
+         |
+         v
+  [Executor Agent]     runs SQL against SQLite, returns results
+         |
+         v
+  [Feedback + Memory]  stores correct queries back to Qdrant
+                       for future few-shot retrieval
+```
 
 ---
 
-## 🚀 Setup & Execution
+## Stack
 
-### 1. Spin up the Infrastructure
-Start the Redis broker and Qdrant vector database:
+| Layer | Package | Version |
+|-------|---------|---------|
+| 🤖 Agent framework | [AgentScope](https://github.com/modelscope/agentscope) | `^0.1.0` |
+| 🧠 Local LLM | [Ollama](https://ollama.com) | Latest |
+| 🗄️ Vector memory | [Qdrant](https://qdrant.tech) (`qdrant-client`) | `^1.9.0` |
+| ⚡ Task queue | [Celery](https://docs.celeryq.dev) | `^5.3.0` |
+| 📨 Message broker | [Redis](https://redis.io) | `^7.0` |
+| 🗃️ Database | SQLite | Built-in |
+| 🐍 Language | Python | `3.9+` |
+
+---
+
+## Plug in any quantized model
+
+The pipeline is not tied to any specific model. Anything in the Ollama ecosystem works, including `qwen2.5`, `llama3`, `mistral`, `phi3`, `codellama`, or any `.gguf` you pull locally.
+
+**1. Pull your model:**
+
+```bash
+ollama run llama3:8b-instruct-q4_K_M
+```
+
+**2. Update `config/model_configs.json`:**
+
+```json
+{
+    "model_type": "ollama_chat",
+    "config_name": "ollama_chat_config",
+    "model_name": "llama3:8b-instruct-q4_K_M",
+    "client_args": {
+        "host": "http://127.0.0.1:11434"
+    }
+}
+```
+
+That is all. No agent code changes required.
+
+---
+
+## Prerequisites
+
+- [Docker and Docker Compose](https://docs.docker.com/get-docker/)
+- Python 3.9 or later
+- [Ollama](https://ollama.com/) running locally
+
+Pull the default model:
+
+```bash
+ollama run qwen2.5
+```
+
+---
+
+## Setup
+
+### 1. Start infrastructure
+
+Starts Redis (Celery broker) and Qdrant (vector memory):
+
 ```bash
 docker-compose up -d
 ```
 
-### 2. Install Dependencies
-Set up your Python environment:
+### 2. Install dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Start the Background Worker
-Open a terminal and start the Celery worker to listen for and process LLM tasks:
-```bash
-# On Windows (uses eventlet for concurrency):
-celery -A src.celery_app worker -l info -P eventlet
+### 3. Start the Celery worker
 
-# On Linux/macOS:
+Open a dedicated terminal and keep it running:
+
+```bash
+# Linux / macOS
 celery -A src.celery_app worker -l info
+
+# Windows
+celery -A src.celery_app worker -l info -P eventlet
 ```
 
-### 4. Run the Application
-In a new terminal, dispatch a natural language query to the background task queue:
+### 4. Run the application
+
+In a separate terminal, dispatch a natural language query:
+
 ```bash
 python main.py
 ```
-*You will see the pipeline in action: The Schema Agent analyzes the request, the SQL Generator creates the query using Qdrant memory, the Validator checks it, and the Executor runs it against the local SQLite DB.*
+
+The pipeline runs in sequence: Schema Agent reads the request, SQL Generator pulls similar past queries from Qdrant and generates SQL, Validator checks it, Executor runs it against the local SQLite database, and the result comes back through Celery.
+
+### 5. Run the demo without any external services
+
+```bash
+python demo.py
+```
+
+The demo monkey-patches AgentScope and uses a hash-based pseudo-embedding so the full RL loop (generate, evaluate, store, retrieve) runs without Ollama, Qdrant, or Redis.
+
+---
+
+## Project structure
+
+```
+t2sql-agentscope/
+├── main.py                      # Entry point: dispatches task to Celery
+├── demo.py                      # Self-contained demo, no external services needed
+├── docker-compose.yml           # Redis + Qdrant
+├── requirements.txt
+├── config/
+│   └── model_configs.json       # Ollama model configuration
+├── src/
+│   ├── agents/
+│   │   ├── t2sql_agent.py       # SQL generation with Qdrant few-shot context
+│   │   └── feedback_agent.py    # Result evaluation and quality scoring
+│   ├── database/
+│   │   └── db_manager.py        # SQLite setup and query execution
+│   ├── memory/
+│   │   └── qdrant_memory.py     # Vector store: upsert, search, collection size
+│   ├── rl_loop.py               # Generate, execute, evaluate, store loop
+│   ├── tasks.py                 # Celery task definitions
+│   └── celery_app.py            # Celery and Redis configuration
+└── tests/
+```
+
+---
+
+## How the memory loop works
+
+Every query that scores above the `store_threshold` (default `0.5`) gets written to Qdrant with its question, SQL, execution result, and score. The next time a semantically similar question arrives, the T2SQL agent retrieves the top-K past examples and injects them into the generation prompt as few-shot context before calling the model.
+
+The system gets better with use. Not because the model changes, but because the retrieval context improves.
+
+```python
+loop = RLLoop(
+    t2sql_agent=t2sql,
+    feedback_agent=feedback,
+    db_manager=db,
+    qdrant_memory=memory,
+    store_threshold=0.5,   # only store queries scoring above this
+    apply_corrections=True,
+)
+```
+
+---
+
+## Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OLLAMA_HOST` | `http://127.0.0.1:11434` | Ollama server URL |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis broker URL |
+| `QDRANT_HOST` | `localhost` | Qdrant server host |
+| `QDRANT_PORT` | `6333` | Qdrant server port |
+| `DB_ID` | `sample` | SQLite database identifier |
+
+---
+
+<div align="center">
+  <sub>Built with <a href="https://github.com/modelscope/agentscope">AgentScope</a> · <a href="https://ollama.com">Ollama</a> · <a href="https://qdrant.tech">Qdrant</a> · <a href="https://docs.celeryq.dev">Celery</a></sub>
+</div>
